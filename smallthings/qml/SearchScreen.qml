@@ -9,6 +9,7 @@ ColumnLayout {
     required property font uiFont
     readonly property int currentRow: results.currentRow
     property bool showHelp: false
+    property bool showIssues: false
     spacing: 0
 
     function focusSearch() {
@@ -39,6 +40,12 @@ ColumnLayout {
         Label {
             text: qsTr("%1 results").arg(screen.backend.resultCount.toLocaleString(Qt.locale(), 'f', 0))
         }
+        Button {
+            objectName: "indexIssuesButton"
+            visible: screen.backend.indexIssueCount > 0
+            text: qsTr("%1 indexing notices...").arg(screen.backend.indexIssueCount)
+            onClicked: screen.showIssues = true
+        }
         Item { Layout.fillWidth: true }
         BusyIndicator {
             objectName: "activityIndicator"
@@ -48,6 +55,15 @@ ColumnLayout {
             visible: running
             Accessible.name: qsTr("Loading results")
         }
+    }
+
+    Loader {
+        active: screen.showIssues
+        sourceComponent: IndexIssuesDialog {
+            backend: screen.backend
+            onClosed: screen.showIssues = false
+        }
+        onLoaded: if (status === Loader.Ready) item.open()
     }
 
     Loader {

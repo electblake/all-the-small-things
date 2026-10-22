@@ -1,6 +1,6 @@
 [project]
 name = "all-the-small-things"
-version = "0.2.0"
+version = "0.3.0"
 description = "An Everything-style Windows file search application in PySide6 and QML"
 requires-python = ">=3.12"
 dependencies = [

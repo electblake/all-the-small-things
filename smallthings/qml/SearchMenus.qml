@@ -7,6 +7,7 @@ MenuBar {
     required property FileActions fileActions
     signal focusSearch()
     signal showHelp()
+    signal showIndex()
 
     Menu {
         title: qsTr("&File")
@@ -26,6 +27,8 @@ MenuBar {
     }
     Menu {
         title: qsTr("&Search")
+        Action { objectName: "searchIndexAction"; text: qsTr("Search &Index…"); onTriggered: menus.showIndex() }
+        MenuSeparator {}
         Action { text: qsTr("Match &Case"); shortcut: "Ctrl+I"; checkable: true; onToggled: menus.backend.setOption("case", checked) }
         Action { text: qsTr("Match Whole &Word"); shortcut: "Ctrl+B"; checkable: true; onToggled: menus.backend.setOption("words", checked) }
         Action { text: qsTr("Match &Path"); shortcut: "Ctrl+U"; checkable: true; onToggled: menus.backend.setOption("path", checked) }

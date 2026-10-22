@@ -8,6 +8,7 @@ $env:PYTHONPATH = ''
 uv sync --frozen --no-dev --group build
 $buildPython = Join-Path $env:UV_PROJECT_ENVIRONMENT 'Scripts/python.exe'
 $releaseVersion = & $buildPython -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
+$env:PATH = "$(Split-Path $buildPython -Parent);$env:SystemRoot\System32;$env:SystemRoot"
 & $buildPython -m PyInstaller packaging/smallthings.spec --noconfirm --clean
 & $IsccPath /Q "/DAppVersion=$releaseVersion" packaging/installer.iss
 $installerFile = Join-Path $projectDirectory "dist/installer/AllTheSmallThings-$releaseVersion-windows-amd64-setup.exe"

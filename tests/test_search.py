@@ -192,3 +192,17 @@ def test_unicode_filename_index_offsets_and_casefold():
     assert names(catalog, "STRASSE") == ["Straße.txt"]
     assert names(catalog, "📁") == ["📁 report.txt"]
     assert names(catalog, "last") == ["last.txt"]
+
+
+def test_root_filter_scopes_text_and_cached_browsing():
+    first = catalog_of(["same.txt", "first.pdf"]).sources[0]
+    second = replace(catalog_of(["same.txt", "second.pdf"]).sources[0], identity="second", root="D:\\")
+    catalog = Catalog((first, second))
+    all_rows = search(catalog, "", Options(), Event())
+    scoped = search(catalog, "", Options(root="second"), Event(), all_rows)
+    assert [row.path for row in scoped.rows] == ["D:\\same.txt", "D:\\second.pdf"]
+    assert search(catalog, "same", Options(root="second"), Event()).total == 1
+    assert search(catalog, "", Options(), Event(), scoped).total == 4
+    changed = second.changed([(10, None, ())], (1, 1))
+    updated = search(Catalog((first, changed)), "", Options(root="second"), Event(), scoped)
+    assert [row.entry.name for row in updated.rows] == ["second.pdf"]

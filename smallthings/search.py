@@ -26,6 +26,8 @@ class Options:
     auto_path: bool = True
     regex: bool = False
     kind: str = "all"
+    root: str = ""
+    folder: str = ""
     sort: str = "name"
     descending: bool = False
     folders_first: bool = True
@@ -406,13 +408,18 @@ def ordered_rows(rows, key, descending, cancelled):
 
 def search(catalog, text, options, cancelled: Event, previous=None):
     predicate = compile_query(text, options)
-    cache_key = options.sort, options.descending, options.folders_first
+    if options.root:
+        catalog = Catalog(tuple(source for source in catalog.sources if source.identity == options.root),
+                          catalog.generation, catalog.orders)
+    cache_key = options.sort, options.descending, options.folders_first, options.root, options.folder
     cached = catalog.orders.get(cache_key)
     if not text and options.kind == "all" and cached is not None:
         return Results(catalog, cached, "", options)
-    if (not text and options.kind == "all" and previous is not None and previous.query == ""
+    if (not text and not options.folder and options.kind == "all" and previous is not None and previous.query == ""
             and previous.options == options and isinstance(previous.rows, IndexedRows)
-            and {s.identity for s in previous.catalog.sources} == {s.identity for s in catalog.sources}):
+            and {s.identity for s in previous.catalog.sources} == {s.identity for s in catalog.sources}
+            and all(source.name_index is next(old.name_index for old in previous.catalog.sources
+                                              if old.identity == source.identity) for source in catalog.sources)):
         result = update_order(catalog, previous, options, cancelled)
         if result is not None:
             catalog.orders[cache_key] = result.rows
@@ -425,9 +432,12 @@ def search(catalog, text, options, cancelled: Event, previous=None):
             candidates = (Row(source, entry) for source in catalog.sources
                           for entry in source.matching_names(needle, cancelled))
     rows = []
+    prefix = options.folder.rstrip("\\").casefold() + "\\" if options.folder else ""
     for index, row in enumerate(candidates):
         if index % 256 == 0 and cancelled.is_set():
             return None
+        if prefix and not row.path.casefold().startswith(prefix):
+            continue
         if options.kind == "file" and row.metadata.folder:
             continue
         if options.kind == "folder" and not row.metadata.folder:

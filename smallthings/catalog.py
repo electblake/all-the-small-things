@@ -71,6 +71,7 @@ class Source:
     additions: Map = field(init=False)
     version: int = field(init=False, default=0)
     revisions: Map = field(init=False)
+    folder_children: Map = field(init=False)
 
     def __post_init__(self):
         self.objects = Map(self.objects)
@@ -80,6 +81,13 @@ class Source:
         self.additions = Map()
         self.version = 0
         self.revisions = Map()
+        folders = {}
+        for identity, metadata in self.objects.items():
+            if metadata.folder:
+                for entry in self.links.get(identity, ()):
+                    folders.setdefault(entry.parent_id, []).append(entry)
+        self.folder_children = Map({parent: tuple(sorted(entries, key=lambda e: (e.key, e.identity)))
+                                    for parent, entries in folders.items()})
 
     @property
     def entries(self):
@@ -100,6 +108,8 @@ class Source:
         additions = self.additions.mutate()
         revisions = self.revisions.mutate()
         count = self.count
+        folders = self.folder_children.mutate()
+        folders_changed = False
         for identity, metadata, entries in updates:
             revisions[identity] = self.version + 1
             if identity in links:
@@ -107,6 +117,15 @@ class Source:
                 previous = links[identity]
             else:
                 previous = ()
+            old_folders = previous if identity in self.objects and self.objects[identity].folder else ()
+            new_folders = entries if metadata is not None and metadata.folder else ()
+            if old_folders != new_folders:
+                folders_changed = True
+                for entry in old_folders:
+                    folders[entry.parent_id] = tuple(e for e in folders[entry.parent_id] if e != entry)
+                for entry in new_folders:
+                    siblings = folders.get(entry.parent_id, ()) + (entry,)
+                    folders[entry.parent_id] = tuple(sorted(siblings, key=lambda e: (e.key, e.identity)))
             for entry in previous:
                 additions.pop(entry.identity, None)
             if metadata is None:
@@ -125,6 +144,7 @@ class Source:
         source.position, source.count = position, count
         source.name_index, source.additions = self.name_index, additions.finish()
         source.version, source.revisions = self.version + 1, revisions.finish()
+        source.folder_children = folders.finish() if folders_changed else self.folder_children
         return source
 
     def matching_names(self, needle, cancelled):

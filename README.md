@@ -9,15 +9,17 @@ uv sync
 .\Start.ps1
 ```
 
-The launcher requests Windows elevation for read-only raw-volume access. The application discovers local fixed NTFS volumes, reads the MFT, and keeps its catalog current using the USN journal. Journals must already exist. Filesystem access and query failures propagate; there is no directory-walking substitute.
-
-When already running in an elevated terminal:
+Run from a normal Windows terminal:
 
 ```powershell
 uv run smallthings
 ```
 
-The first scan reads filesystem metadata. Subsequent launches load the SQLite metadata catalog from `%LOCALAPPDATA%\AllTheSmallThings\catalog.sqlite3` and replay journal changes. No file contents are indexed. Catalogs retain separate hardlinks, full record sequence identities, and parent relationships for directory moves.
+The application enumerates directories using the signed-in user's access. Neither launch nor installation requests elevation. Local, removable, and mapped network drives are supported regardless of filesystem; existing catalog selections are preserved. Search > Search Index manages roots and offers Rescan now.
+
+Results become searchable during the initial scan. Complete snapshots are stored in `%LOCALAPPDATA%/AllTheSmallThings/filesystem.sqlite3`; the old raw-NTFS cache is not reused. Scans repeat 30 seconds after the preceding scan finishes, so changes on large drives may take longer to appear than with a USN journal. A previous complete snapshot remains searchable during refresh. No file contents are read.
+
+Inaccessible folders and unavailable roots are listed in the indexing report, opened from the status bar. Indexing continues with other paths and drives. Directory junctions and symbolic links are listed but their targets are not traversed, preventing cycles and crossing catalog roots; these appear in the report too. Hidden and system entries are included when Windows permits enumeration. File identities are path-based; renaming a selected folder clears its folder scope back to its drive.
 
 ## Search
 
@@ -67,15 +69,15 @@ uv run pytest -q
 uv run ruff check smallthings
 ```
 
-`tools/live_check.py` is an elevated integration check that reads the real MFT and verifies hardlinks, renames, metadata updates, deletions, and searching against temporary test files. `tools/launch_check.py` opens the real application and records its completed startup, search, clipboard check, and screenshot under `artifacts/`.
+`tools/normal_user_check.py` exercises the real application entry point, every attached root, QML search input, root filtering and clipboard without elevation. It writes its report under `artifacts/`. The test suite also exercises actual filesystem changes, cache reload, and Windows access denials. The older raw-NTFS diagnostic tools remain developer utilities; they are not the application's indexing path.
 
-Technical references: the supplied catalog, index, NTFS, and search specifications; [Everything documentation](https://www.voidtools.com/support/everything/); [Microsoft change journals](https://learn.microsoft.com/en-us/windows/win32/fileio/change-journal-operations); [Qt for Python](https://doc.qt.io/qtforpython-6/).
+Technical references: [Python directory enumeration](https://docs.python.org/3/library/os.html#os.scandir), [Everything documentation](https://www.voidtools.com/support/everything/), and [Qt for Python](https://doc.qt.io/qtforpython-6/).
 
 ## Windows installer
 
-Download `AllTheSmallThings-0.2.0-windows-amd64-setup.exe` from the GitHub release. Setup installs the self-contained x64 application per user, adds a Start-menu shortcut, and provides an uninstaller. Python and uv are not required on the target machine. The catalog stays in Local AppData and is preserved when uninstalling.
+Download `AllTheSmallThings-0.3.0-windows-amd64-setup.exe` from the GitHub release. Setup installs the self-contained x64 application per user, adds a Start-menu shortcut, and provides an uninstaller. Python and uv are not required on the target machine. The catalog stays in Local AppData and is preserved when uninstalling.
 
-The installer does not request elevation. The application's existing raw NTFS indexing path requires an elevated application process. Source launch remains `uv run smallthings` from an elevated terminal; the installed shortcut can be run as administrator. No volumes are excluded.
+Both the installer and application run without elevation. No drive is excluded by the scanner.
 
 Build with PowerShell 7 and the installed Inno Setup compiler:
 
@@ -83,4 +85,10 @@ Build with PowerShell 7 and the installed Inno Setup compiler:
 pwsh -NoProfile -File packaging/build.ps1 -IsccPath 'C:/Users/shoji/AppData/Local/Programs/Inno Setup 6/ISCC.exe'
 ```
 
-The script uses the locked build dependency group in `.build-venv`, stages a PyInstaller onedir bundle, compiles Setup, and writes `dist/installer/SHA256SUMS.txt`. Version metadata comes from `pyproject.toml`; the Inno AppId remains stable across upgrades. Release 0.2.0 is unsigned. Installer runtime/upgrade/uninstall testing was not performed for this release.
+The script uses the locked build dependency group in `.build-venv`, stages a PyInstaller onedir bundle, compiles Setup, and writes `dist/installer/SHA256SUMS.txt`. Version metadata comes from `pyproject.toml`; the Inno AppId remains stable across upgrades. Release 0.3.0 is unsigned. See the release notes for validation results.
+
+## Search index management
+
+The resizable left **Files & Folders** panel uses Qt TreeView to display configured drives and expandable folders from the catalog. Selecting a drive filters to that catalog; selecting a folder filters to its contents and descendants. **All locations** clears the scope without changing the search text. The tree reads the index, not the filesystem, and updates as catalog changes arrive. Open **Search → Search Index** to add attached local NTFS drives, rename catalog entries, pause indexing with the Index checkbox, or remove entries. Save applies changes; Cancel discards the draft. Removing a root removes its search results, not its files or cached metadata.
+
+Catalog settings are stored in `%LOCALAPPDATA%/AllTheSmallThings/index.json`. The initial catalog retains the automatically discovered fixed NTFS drives. Saved empty catalogs remain empty. Network and other filesystem drives are listed in the picker but cannot yet be added: their indexing providers are not implemented. The panel uses a Qt Quick SplitView; it is resizable, not a floating QDockWidget.

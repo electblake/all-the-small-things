@@ -51,24 +51,29 @@ class Windows:
             if restype == w.BOOL:
                 function.errcheck = native_result
 
-    def volumes(self):
+    def drives(self):
+        from PySide6.QtCore import QStorageInfo
+
         mask = self.dll.GetLogicalDrives()
-        seen = set()
         for number in range(26):
             if not mask & (1 << number):
                 continue
             root = chr(65 + number) + ":\\"
-            if self.dll.GetDriveTypeW(root) != 3:
-                continue
-            filesystem = ctypes.create_unicode_buffer(64)
-            self.dll.GetVolumeInformationW(root, None, 0, None, None, None, filesystem, 64)
-            if filesystem.value != "NTFS":
-                continue
-            identity = ctypes.create_unicode_buffer(64)
-            self.dll.GetVolumeNameForVolumeMountPointW(root, identity, 64)
-            if identity.value not in seen:
-                seen.add(identity.value)
-                yield root, identity.value
+            kind = self.dll.GetDriveTypeW(root)
+            storage = QStorageInfo(root)
+            filesystem = bytes(storage.fileSystemType()).decode()
+            supported = kind in (2, 3, 4, 5)
+            identity = root.casefold()
+            if kind in (2, 3) and storage.isReady():
+                buffer = ctypes.create_unicode_buffer(64)
+                self.dll.GetVolumeNameForVolumeMountPointW(root, buffer, 64)
+                identity = buffer.value
+            yield {"root": root, "identity": identity, "name": root,
+                       "filesystem": filesystem, "network": kind == 4, "supported": supported}
+
+    def volumes(self):
+        for drive in self.drives():
+            yield drive["root"], drive["identity"]
 
 
 def u16(data, offset):
