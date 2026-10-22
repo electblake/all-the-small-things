@@ -1,0 +1,35 @@
+[project]
+name = "all-the-small-things"
+version = "0.2.0"
+description = "An Everything-style Windows file search application in PySide6 and QML"
+requires-python = ">=3.12"
+dependencies = [
+    "immutables>=0.21",
+    "pcre2>=0.7.1",
+    "PySide6>=6.8,<7",
+]
+
+[project.scripts]
+smallthings = "smallthings.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["smallthings"]
+
+[dependency-groups]
+build = [
+    "pyinstaller==6.16.0",
+]
+dev = ["pytest>=8", "ruff>=0.11"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+extend-ignore = ["B008"]

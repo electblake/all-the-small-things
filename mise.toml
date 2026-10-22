@@ -1,0 +1,10 @@
+[tools]
+powershell = "7"
+python = "3.12"
+uv = "latest"
+
+[tasks.run]
+run = "powershell -ExecutionPolicy Bypass -File Start.ps1"
+
+[tasks.test]
+run = "uv run pytest -q"

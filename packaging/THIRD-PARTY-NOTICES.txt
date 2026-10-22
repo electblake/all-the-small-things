@@ -1,0 +1,7 @@
+All the Small Things uses dynamically linked Qt and PySide6 libraries, distributed under LGPLv3, and Shiboken6. Their license texts are included alongside this notice. Users may replace these libraries with compatible modified versions in the _internal directory. Nothing in this distribution restricts reverse engineering for debugging modifications to these libraries.
+Qt/PySide source: https://code.qt.io/ ; https://download.qt.io/official_releases/QtForPython/
+Qt source: https://download.qt.io/official_releases/qt/
+Python: https://www.python.org/ (PSF license, bundled).
+PCRE2 and its Python bindings: https://github.com/PCRE2Project/pcre2 and https://github.com/grtetrault/pcre2.py (bundled license notices).
+immutables: https://github.com/MagicStack/immutables (Apache-2.0, bundled license).
+PyInstaller bootloader: https://pyinstaller.org/ (GPL with distribution exception).
