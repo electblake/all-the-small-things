@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.4.0] - 2026-10-23
+
+### Added
+- Added search history with Qt's built-in solid dropdown arrow and a list matching the search field width.
+- Saved unique, successful queries with matching results, newest first; selecting an entry runs it again.
+- Added Alt+Down to open history and Escape to dismiss it without clearing the query.
+
+### Changed
+- Stored catalog settings and search history with QSettings in the platformdirs user config directory.
+- Included platformdirs and its license in the Windows installer.
+
+### Fixed
+- Preserved existing catalog choices through a one-time import from `index.json`, including disabled roots and empty catalogs.
+- Excluded cancelled, failed, blank, zero-result, and outdated-catalog searches from history.
+- Avoided rewriting unchanged history during background refreshes.
+- Prevented searches from publishing results from an outdated catalog during indexing.
+- Preserved typed text when history updates and restored popup keyboard focus.
+- Corrected the README's encoding and outdated drive-support description.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

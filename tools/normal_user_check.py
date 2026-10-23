@@ -13,13 +13,14 @@ project = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project))
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtGui import QGuiApplication
+
 from smallthings import app as application
 from smallthings.ntfs import Windows
 
 assert not ctypes.windll.shell32.IsUserAnAdmin()
 expected = list(Windows().volumes())
 profile = tempfile.mkdtemp(prefix='smallthings-standard-user-')
-os.environ['LOCALAPPDATA'] = profile
+os.environ['WIN_PD_OVERRIDE_LOCAL_APPDATA'] = profile
 report = {'elevated': False, 'roots': [root for root, _ in expected], 'searches': []}
 original_exec = QGuiApplication.exec
 started = monotonic()

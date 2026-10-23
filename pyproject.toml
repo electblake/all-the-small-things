@@ -1,11 +1,12 @@
 [project]
 name = "all-the-small-things"
-version = "0.3.0"
+version = "0.4.0"
 description = "An Everything-style Windows file search application in PySide6 and QML"
 requires-python = ">=3.12"
 dependencies = [
     "immutables>=0.21",
     "pcre2>=0.7.1",
+    "platformdirs>=4.13.5",
     "PySide6>=6.8,<7",
 ]
 
@@ -23,7 +24,13 @@ packages = ["smallthings"]
 build = [
     "pyinstaller==6.16.0",
 ]
-dev = ["pytest>=8", "ruff>=0.11"]
+dev = [
+    "pillow>=13.0.0",
+    "psutil>=7.2.2",
+    "pytest>=8",
+    "pywinauto>=0.6.9",
+    "ruff>=0.11",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

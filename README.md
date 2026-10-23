@@ -75,7 +75,7 @@ Technical references: [Python directory enumeration](https://docs.python.org/3/l
 
 ## Windows installer
 
-Download `AllTheSmallThings-0.3.0-windows-amd64-setup.exe` from the GitHub release. Setup installs the self-contained x64 application per user, adds a Start-menu shortcut, and provides an uninstaller. Python and uv are not required on the target machine. The catalog stays in Local AppData and is preserved when uninstalling.
+Download `AllTheSmallThings-0.4.0-windows-amd64-setup.exe` from the GitHub release. Setup installs the self-contained x64 application per user, adds a Start-menu shortcut, and provides an uninstaller. Python and uv are not required on the target machine. The catalog stays in Local AppData and is preserved when uninstalling.
 
 Both the installer and application run without elevation. No drive is excluded by the scanner.
 
@@ -85,10 +85,10 @@ Build with PowerShell 7 and the installed Inno Setup compiler:
 pwsh -NoProfile -File packaging/build.ps1 -IsccPath 'C:/Users/shoji/AppData/Local/Programs/Inno Setup 6/ISCC.exe'
 ```
 
-The script uses the locked build dependency group in `.build-venv`, stages a PyInstaller onedir bundle, compiles Setup, and writes `dist/installer/SHA256SUMS.txt`. Version metadata comes from `pyproject.toml`; the Inno AppId remains stable across upgrades. Release 0.3.0 is unsigned. See the release notes for validation results.
+The script uses the locked build dependency group in `.build-venv`, stages a PyInstaller onedir bundle, compiles Setup, and writes `dist/installer/SHA256SUMS.txt`. Version metadata comes from `pyproject.toml`; the Inno AppId remains stable across upgrades. Release 0.4.0 is unsigned. See the release notes for validation results.
 
 ## Search index management
 
-The resizable left **Files & Folders** panel uses Qt TreeView to display configured drives and expandable folders from the catalog. Selecting a drive filters to that catalog; selecting a folder filters to its contents and descendants. **All locations** clears the scope without changing the search text. The tree reads the index, not the filesystem, and updates as catalog changes arrive. Open **Search → Search Index** to add attached local NTFS drives, rename catalog entries, pause indexing with the Index checkbox, or remove entries. Save applies changes; Cancel discards the draft. Removing a root removes its search results, not its files or cached metadata.
+The resizable left **Files & Folders** panel uses Qt TreeView to display configured drives and expandable folders from the catalog. Selecting a drive filters to that catalog; selecting a folder filters to its contents and descendants. **All locations** clears the scope without changing the search text. The tree reads the index, not the filesystem, and updates as catalog changes arrive. Open **Search → Search Index** to add attached local, removable, or mapped network drives, rename catalog entries, pause indexing with the Index checkbox, or remove entries. Save applies changes; Cancel discards the draft. Removing a root removes its search results, not its files or cached metadata.
 
-Catalog settings are stored in `%LOCALAPPDATA%/AllTheSmallThings/index.json`. The initial catalog retains the automatically discovered fixed NTFS drives. Saved empty catalogs remain empty. Network and other filesystem drives are listed in the picker but cannot yet be added: their indexing providers are not implemented. The panel uses a Qt Quick SplitView; it is resizable, not a floating QDockWidget.
+Catalog settings and search history use QSettings in `settings.ini` inside the user config directory selected by platformdirs (`%LOCALAPPDATA%/AllTheSmallThings` on Windows). Existing `index.json` catalog choices are imported once when the QSettings catalog is first created; later changes use `settings.ini`. The search field's built-in Qt dropdown lists successful, nonempty queries with matching results, newest first and without duplicates. Select an entry to search again; Alt+Down opens the list and Escape dismisses it. Cancelled, failed, blank, zero-result, and outdated-catalog searches are not recorded. The initial catalog retains the automatically discovered fixed NTFS drives. Saved empty catalogs remain empty. The panel uses a Qt Quick SplitView; it is resizable, not a floating QDockWidget.

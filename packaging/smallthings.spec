@@ -8,7 +8,7 @@ root = Path(SPECPATH).parent
 version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
 version_tuple = tuple(map(int, version.split("."))) + (0,)
 licenses = []
-for name in ("PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "pcre2", "immutables"):
+for name in ("PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "pcre2", "immutables", "platformdirs"):
     distribution = importlib.metadata.distribution(name)
     for file in distribution.files:
         if any(part.lower().startswith(("license", "copying", "notice")) for part in file.parts):

@@ -3,10 +3,10 @@ import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from pathlib import Path
 from queue import SimpleQueue
 from threading import Event
 
+from platformdirs import user_config_path
 from PySide6.QtCore import (
     Property,
     QAbstractTableModel,
@@ -106,6 +106,7 @@ class Backend(QObject):
     changed = Signal()
     indexSettingsChanged = Signal()
     availableDrivesChanged = Signal()
+    searchHistoryChanged = Signal()
 
     def __init__(self, roots=()):
         super().__init__()
@@ -123,7 +124,9 @@ class Backend(QObject):
         available = list(Windows().volumes())
         if roots:
             available = [(root, identity) for root, identity in available if root[:2].upper() in roots]
-        self.settings = IndexSettings(Path(os.environ["LOCALAPPDATA"]) / "AllTheSmallThings" / "index.json", available)
+        self.config_dir = user_config_path("AllTheSmallThings", appauthor=False, ensure_exists=True)
+        self.settings = IndexSettings(self.config_dir / "settings.ini", available)
+        self._search_history = self.settings.store.value("search/history", [], type=list)
         self.tree.publish(self.catalog, self.settings.entries)
         self._available_drives = []
         self._index_issues = {}
@@ -138,6 +141,7 @@ class Backend(QObject):
 
     catalogRoots = Property("QVariantList", lambda self: self.settings.entries, notify=indexSettingsChanged)
     availableDrives = Property("QVariantList", lambda self: self._available_drives, notify=availableDrivesChanged)
+    searchHistory = Property("QStringList", lambda self: self._search_history, notify=searchHistoryChanged)
 
     @Slot()
     def refreshDrives(self):
@@ -181,7 +185,7 @@ class Backend(QObject):
         self.rescan.set()
 
     def index_volumes(self, roots):
-        cache = Path(os.environ["LOCALAPPDATA"]) / "AllTheSmallThings"
+        cache = self.config_dir
         cache.mkdir(exist_ok=True)
         store = Store(cache / "filesystem.sqlite3")
         entries = [entry for entry in roots if entry["enabled"]]
@@ -266,8 +270,15 @@ class Backend(QObject):
             completed = self.query_future
             self.query_future = None
             result = completed.result()
-            if result is not None and not self.cancelled.is_set():
+            if (result is not None and not self.cancelled.is_set()
+                    and result.catalog.generation == self.catalog.generation):
                 self.model.publish(result)
+                if result.query.strip() and result.total and self._search_history[:1] != [result.query]:
+                    self._search_history = [result.query] + [
+                        query for query in self._search_history if query != result.query]
+                    self.settings.store.setValue("search/history", self._search_history)
+                    self.settings.store.sync()
+                    self.searchHistoryChanged.emit()
                 self.changed.emit()
         if self.pending_query and self.query_future is None and (self.query or self.catalog.sources or not self._busy):
             self.pending_query = False

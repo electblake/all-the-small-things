@@ -10,7 +10,7 @@ import pytest
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["QT_QPA_FONTDIR"] = "C:/Windows/Fonts"
 
-from PySide6.QtCore import QMetaObject, Qt, QUrl, qInstallMessageHandler
+from PySide6.QtCore import QMetaObject, QPoint, QPointF, Qt, QUrl, qInstallMessageHandler
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -19,12 +19,13 @@ from test_search import catalog_of
 
 from smallthings.backend import Backend
 from smallthings.catalog import Entry
+from smallthings.index_settings import IndexSettings
 from smallthings.ntfs import Windows
 
 
 def test_index_failure_stops_polling(monkeypatch, tmp_path):
     app = QGuiApplication.instance() or QGuiApplication([])
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path))
     monkeypatch.setattr(Windows, "volumes", lambda self: iter(()))
     backend = Backend()
     backend.stopped.set()
@@ -46,7 +47,7 @@ def test_index_failure_stops_polling(monkeypatch, tmp_path):
 
 def test_query_failure_is_consumed_and_next_query_works(monkeypatch, tmp_path):
     app = QGuiApplication.instance() or QGuiApplication([])
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path))
     monkeypatch.setattr(Windows, "volumes", lambda self: iter(()))
     backend = Backend()
     backend.timer.stop()
@@ -61,11 +62,68 @@ def test_query_failure_is_consumed_and_next_query_works(monkeypatch, tmp_path):
         backend.poll()
     assert raised.value is failure
     assert backend.query_future is None
+    assert backend.searchHistory == []
     backend.setQuery("report")
     backend.poll()
     backend.query_future.result(timeout=5)
     backend.poll()
     assert [row.entry.name for row in backend.model.results.rows] == ["report.pdf"]
+    assert backend.searchHistory == ["report"]
+    backend.shutdown()
+    app.processEvents()
+
+
+def test_search_history_completion_duplicates_and_restart(monkeypatch, tmp_path):
+    app = QGuiApplication.instance() or QGuiApplication([])
+    monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path))
+    monkeypatch.setattr(Windows, "volumes", lambda self: iter(()))
+    backend = Backend()
+    backend.timer.stop()
+    backend.stopped.set()
+    backend.rescan.set()
+    backend.index_future.result(timeout=5)
+    backend.events = SimpleQueue()
+    backend._busy = False
+    backend.catalog = catalog_of(["report.pdf", "notes.txt"])
+
+    def complete(query):
+        backend.setQuery(query)
+        backend.poll()
+        backend.query_future.result(timeout=5)
+        backend.poll()
+
+    backend.setQuery("unsubmitted")
+    assert backend.searchHistory == []
+    complete("report")
+    complete("notes")
+    complete("report")
+    assert backend.searchHistory == ["report", "notes"]
+    history_changes = []
+    backend.searchHistoryChanged.connect(lambda: history_changes.append(True))
+    complete("report")
+    assert history_changes == []
+    complete("")
+    complete("missing")
+    backend.setQuery("pdf")
+    backend.poll()
+    backend.query_future.result(timeout=5)
+    backend.setQuery("txt")
+    backend.poll()
+    assert backend.searchHistory == ["report", "notes"]
+    backend.query_future.result(timeout=5)
+    backend.poll()
+    backend.setQuery("pdf")
+    backend.poll()
+    backend.query_future.result(timeout=5)
+    backend.catalog = replace(backend.catalog, generation=backend.catalog.generation + 1)
+    backend.poll()
+    history = backend.searchHistory
+    result = backend.model.results
+    backend.shutdown()
+    assert result.query == "txt"
+    assert history == ["txt", "report", "notes"], (result.query, result.total, backend.catalog.count)
+    backend = Backend()
+    assert backend.searchHistory == ["txt", "report", "notes"]
     backend.shutdown()
     app.processEvents()
 
@@ -80,7 +138,7 @@ def test_qml_search_sort_and_clipboard(monkeypatch, tmp_path):
         {"root": "T:\\", "identity": "test-volume", "name": "Test drive", "filesystem": "NTFS", "network": False, "supported": True},
         {"root": "N:\\", "identity": "", "name": "Network", "filesystem": "NTFS", "network": True, "supported": False},
     ]))
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path))
     backend = Backend()
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({"backend": backend})
@@ -95,8 +153,33 @@ def test_qml_search_sort_and_clipboard(monkeypatch, tmp_path):
     search_field.setProperty("text", "ext:pdf")
     QTest.qWait(300)
     assert backend.resultCount == 1
+    assert backend.searchHistory == ["ext:pdf"]
+    history = window.findChild(QObject, "searchHistory")
+    popup = window.findChild(QObject, "searchHistoryPopup")
+    search_field.setProperty("text", "draft")
+    QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     history.mapToScene(history.boundingRect().topRight()).toPoint() + QPoint(-12, 15))
+    QTest.qWait(100)
+    assert popup.property("visible")
+    assert popup.property("width") == history.property("width")
+    assert popup.property("y") == history.property("height")
+    assert search_field.property("text") == "draft"
+    assert window.grabWindow().save(str(tmp_path / "search-history.png"))
+    QTest.mouseClick(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     history.mapToScene(QPointF(30, history.height() + 15)).toPoint())
+    QTest.qWait(300)
+    assert not popup.property("visible")
+    assert search_field.property("text") == "ext:pdf"
+    assert backend.searchHistory == ["ext:pdf"]
     backend.copyPath(0)
     assert app.clipboard().text() == "C:\\report.pdf"
+    QTest.keyClick(window, Qt.Key.Key_Down, Qt.KeyboardModifier.AltModifier)
+    QTest.qWait(100)
+    assert popup.property("visible")
+    QTest.keyClick(window, Qt.Key.Key_Escape)
+    QTest.qWait(100)
+    assert not popup.property("visible")
+    assert search_field.property("text") == "ext:pdf"
     search_field.setProperty("text", "")
     backend.sortBy(0)
     QTest.qWait(300)
@@ -230,7 +313,7 @@ def test_qml_search_sort_and_clipboard(monkeypatch, tmp_path):
     QTest.qWait(700)
     assert backend.catalogRoots == [{"identity": "test-volume", "root": "T:\\", "name": "Test drive", "enabled": False}]
     assert backend.catalog.count == 2  # Disabled entry edits do not restart the index.
-    assert (tmp_path / "AllTheSmallThings/index.json").exists()
+    assert (tmp_path / "AllTheSmallThings/settings.ini").exists()
     assert QMetaObject.invokeMethod(window.findChild(QObject, "searchIndexAction"), "trigger")
     QTest.qWait(100)
     assert QMetaObject.invokeMethod(window.findChild(QObject, "removeDrive"), "click")
@@ -246,7 +329,7 @@ def test_qml_search_sort_and_clipboard(monkeypatch, tmp_path):
 
 def test_catalog_reconfiguration_replaces_live_sources(monkeypatch, tmp_path):
     app = QGuiApplication.instance() or QGuiApplication([])
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path))
     monkeypatch.setattr(Windows, "volumes", lambda self: iter(()))
     def wait_for(predicate, milliseconds):
         deadline = monotonic() + milliseconds / 1000
@@ -288,7 +371,7 @@ def test_catalog_tree_selection_filters_descendants(monkeypatch, tmp_path):
     app = QGuiApplication.instance() or QGuiApplication([])
     messages = []
     qInstallMessageHandler(lambda kind, context, message: messages.append(message))
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path))
     monkeypatch.setattr(Windows, "volumes", lambda self: iter(()))
     backend = Backend()
     backend.settings.entries = [{"identity": "volume", "root": "C:\\", "name": "Drive", "enabled": True}]
@@ -336,22 +419,21 @@ def test_catalog_tree_selection_filters_descendants(monkeypatch, tmp_path):
 
 def test_normal_user_qml_index_report_and_live_refresh(monkeypatch, tmp_path):
     import ctypes
-    import json
 
     from PySide6.QtCore import QObject
 
     assert not ctypes.windll.shell32.IsUserAnAdmin()
     app = QGuiApplication.instance() or QGuiApplication([])
-    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'profile'))
+    monkeypatch.setenv('WIN_PD_OVERRIDE_LOCAL_APPDATA', str(tmp_path / 'profile'))
     root = tmp_path / 'files'
     root.mkdir()
     (root / 'initial.txt').write_text('initial')
-    settings = tmp_path / 'profile/AllTheSmallThings/index.json'
+    settings = tmp_path / 'profile/AllTheSmallThings/settings.ini'
     settings.parent.mkdir(parents=True)
-    settings.write_text(json.dumps([
+    IndexSettings(settings, []).save([
         {'identity': 'fixture', 'root': str(root) + '\\', 'name': 'Fixture', 'enabled': True},
         {'identity': 'denied', 'root': 'C:\\System Volume Information\\', 'name': 'Denied', 'enabled': True},
-    ]))
+    ])
     backend = Backend()
     engine = QQmlApplicationEngine()
     engine.setInitialProperties({'backend': backend})

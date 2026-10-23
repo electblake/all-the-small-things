@@ -4,4 +4,5 @@ Qt source: https://download.qt.io/official_releases/qt/
 Python: https://www.python.org/ (PSF license, bundled).
 PCRE2 and its Python bindings: https://github.com/PCRE2Project/pcre2 and https://github.com/grtetrault/pcre2.py (bundled license notices).
 immutables: https://github.com/MagicStack/immutables (Apache-2.0, bundled license).
+platformdirs: https://github.com/tox-dev/platformdirs (MIT, bundled license).
 PyInstaller bootloader: https://pyinstaller.org/ (GPL with distribution exception).

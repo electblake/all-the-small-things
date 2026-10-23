@@ -9,6 +9,7 @@ from pathlib import Path
 from time import monotonic, sleep
 
 import psutil
+from PySide6.QtCore import QSettings
 from pywinauto import Desktop
 
 assert not ctypes.windll.shell32.IsUserAnAdmin()
@@ -17,13 +18,14 @@ profile = Path(tempfile.mkdtemp(prefix='smallthings-packaged-check-'))
 root = profile / 'files'
 root.mkdir()
 (root / 'release-smoke-needle.txt').write_text('release smoke')
-settings = profile / 'AllTheSmallThings/index.json'
+settings = profile / 'AllTheSmallThings/settings.ini'
 settings.parent.mkdir()
-settings.write_text(json.dumps([
+roots = [
     {'identity': 'fixture', 'root': str(root) + '\\', 'name': 'Fixture', 'enabled': True},
     {'identity': 'denied', 'root': 'C:\\System Volume Information\\', 'name': 'Denied', 'enabled': True},
-]))
-env = dict(os.environ, LOCALAPPDATA=str(profile))
+]
+settings.with_name('index.json').write_text(json.dumps(roots), encoding='utf-8')
+env = dict(os.environ, WIN_PD_OVERRIDE_LOCAL_APPDATA=str(profile))
 env.pop('QT_QPA_PLATFORM', None)
 env.pop('PYTHONPATH', None)
 env.pop('VIRTUAL_ENV', None)
@@ -62,4 +64,10 @@ assert '0 results' in texts
 window.capture_as_image().save(project / 'artifacts' / ('source-launch.png' if sys.argv[1] == 'source' else 'packaged-launch.png'))
 window.close()
 assert process.wait(timeout=20) == 0
-print('PASS', command, 'non-elevated startup, search match/no-match, access report, clean exit', flush=True)
+store = QSettings(str(settings), QSettings.Format.IniFormat)
+assert json.loads(store.value("index/roots")) == roots
+history = store.value("search/history", [], type=list)
+assert history, history
+assert {query.strip() for query in history} == {'release-smoke-needle'}, history
+assert len(history) == len(set(history)), history
+print('PASS', command, 'non-elevated startup, search match/no-match, catalog migration, persisted history, access report, clean exit', flush=True)
